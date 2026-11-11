@@ -1,0 +1,2 @@
+# Read by PHP on the server only. Browsers are refused, so this folder cannot be listed or downloaded.
+Require all denied

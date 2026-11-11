@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.8.0",
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    { "src": "/(includes|config|database|cli|lib|app|components|public|phpmailer|docs|uploads/private|api)(/.*)?", "status": 404 },
+    { "src": "/(.*\\.(php|sql|md|json|zip|lock|log|ini|env))$", "dest": "/api/index.php" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/api/index.php" }
+  ]
+}

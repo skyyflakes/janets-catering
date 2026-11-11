@@ -1,0 +1,92 @@
+[
+  {
+    "region_code": "13",
+    "region_name": "National Capital Region (NCR)",
+    "psgc_code": "1300000000"
+  },
+  {
+    "region_code": "14",
+    "region_name": "Cordillera Administrative Region (CAR)",
+    "psgc_code": "1400000000"
+  },
+  {
+    "region_code": "01",
+    "region_name": "Region I (Ilocos Region)",
+    "psgc_code": "0100000000"
+  },
+  {
+    "region_code": "02",
+    "region_name": "Region II (Cagayan Valley)",
+    "psgc_code": "0200000000"
+  },
+  {
+    "region_code": "03",
+    "region_name": "Region III (Central Luzon)",
+    "psgc_code": "0300000000"
+  },
+  {
+    "region_code": "04",
+    "region_name": "Region IV-A (CALABARZON)",
+    "psgc_code": "0400000000"
+  },
+  {
+    "region_code": "17",
+    "region_name": "MIMAROPA Region",
+    "psgc_code": "1700000000"
+  },
+  {
+    "region_code": "05",
+    "region_name": "Region V (Bicol Region)",
+    "psgc_code": "0500000000"
+  },
+  {
+    "region_code": "06",
+    "region_name": "Region VI (Western Visayas)",
+    "psgc_code": "0600000000"
+  },
+  {
+    "region_code": "18",
+    "region_name": "Negros Island Region (NIR)",
+    "psgc_code": "1800000000"
+  },
+  {
+    "region_code": "07",
+    "region_name": "Region VII (Central Visayas)",
+    "psgc_code": "0700000000"
+  },
+  {
+    "region_code": "08",
+    "region_name": "Region VIII (Eastern Visayas)",
+    "psgc_code": "0800000000"
+  },
+  {
+    "region_code": "09",
+    "region_name": "Region IX (Zamboanga Peninsula)",
+    "psgc_code": "0900000000"
+  },
+  {
+    "region_code": "10",
+    "region_name": "Region X (Northern Mindanao)",
+    "psgc_code": "1000000000"
+  },
+  {
+    "region_code": "11",
+    "region_name": "Region XI (Davao Region)",
+    "psgc_code": "1100000000"
+  },
+  {
+    "region_code": "12",
+    "region_name": "Region XII (SOCCSKSARGEN)",
+    "psgc_code": "1200000000"
+  },
+  {
+    "region_code": "16",
+    "region_name": "Region XIII (Caraga)",
+    "psgc_code": "1600000000"
+  },
+  {
+    "region_code": "19",
+    "region_name": "Bangsamoro Autonomous Region In Muslim Mindanao (BARMM)",
+    "psgc_code": "1900000000"
+  }
+]

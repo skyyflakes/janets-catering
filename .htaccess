@@ -1,0 +1,8 @@
+# Janet's Quality Catering: web access rules for the whole project folder.
+# No folder shows a file listing.
+Options -Indexes
+
+# Project and tool files are for the server only: dot files, package and build settings, SQL, notes, logs and archives.
+<FilesMatch "(^\.|\.(sql|json|mjs|cjs|ts|tsx|yaml|yml|lock|md|log|bak|old|zip|gz|7z|rar|ini|env)$)">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,24 @@
+# Real client files: receipts, attachments, profile photos and uploaded menu photos
+uploads/private/
+uploads/profile/
+uploads/*.*
+# Backups and archives
+*.zip
+*.bak
+*.log
+# Local tools
+.vercel/
+.vscode/
+.claude/
+Thumbs.db
+
+# Original rules
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.env*.local
+node_modules
+.next/
+.DS_Store
