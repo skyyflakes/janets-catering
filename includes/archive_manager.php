@@ -60,7 +60,7 @@ function jq_purge_expired_archives(PDO $pdo, bool $dryRun = false): array
 {
     $result = ['bookings' => 0, 'reports' => 0, 'errors' => 0, 'skipped' => false, 'dry_run' => $dryRun, 'due_bookings' => 0, 'due_reports' => 0];
 
-    if ((int)$pdo->query("SELECT GET_LOCK('jq_archive_purge', 0)")->fetchColumn() !== 1) {
+    if (!jq_db_lock($pdo, 'jq_archive_purge')) {
         $result['skipped'] = true; // another run is in progress
         return $result;
     }
@@ -103,7 +103,7 @@ function jq_purge_expired_archives(PDO $pdo, bool $dryRun = false): array
         }
         return $result;
     } finally {
-        $pdo->query("SELECT RELEASE_LOCK('jq_archive_purge')")->fetchAll();
+        jq_db_unlock($pdo, 'jq_archive_purge');
     }
 }
 

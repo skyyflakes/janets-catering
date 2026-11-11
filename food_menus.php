@@ -14,14 +14,12 @@ $is_admin = in_array(jq_require_roles($pdo ?? getDBConnection(), ['ADMIN', 'OWNE
 
 // Upload directory
 $upload_dir = 'uploads/menus/';
-if (!is_dir($upload_dir)) {
-    mkdir($upload_dir, 0755, true);
-}
+jq_file_dir($upload_dir);
 
 // -----------------------------------------------------------------
 // Ensure tables exist (safe fallback if SQL file not yet imported)
 // -----------------------------------------------------------------
-try {
+if (!jq_is_pg()) try { // MySQL only: the PostgreSQL database is created complete
     $pdo->exec("CREATE TABLE IF NOT EXISTS `menu_packages` (
         `package_id` INT AUTO_INCREMENT PRIMARY KEY,
         `package_name` VARCHAR(150) NOT NULL,
@@ -94,12 +92,12 @@ function handleMenuPhoto($field, $upload_dir, $prefix, $fallback = null) {
         return $fallback;
     }
     $path = $upload_dir . $prefix . '_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-    if (!move_uploaded_file($_FILES[$field]['tmp_name'], $path)) {
+    if (!jq_file_save_upload($_FILES[$field]['tmp_name'], $path)) {
         $menu_photo_error = 'The picture could not be saved. Please try again.';
         return $fallback;
     }
-    if ($fallback && file_exists($fallback)) {
-        @unlink($fallback); // only after the new picture is safely stored
+    if ($fallback && jq_file_exists($fallback)) {
+        jq_file_delete($fallback); // only after the new picture is safely stored
     }
     return $path;
 }
@@ -129,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     // A new package goes last in the list and uses the table's default icon.
                     $next_order = (int)$pdo->query("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM menu_packages")->fetchColumn();
                     $pdo->prepare("INSERT INTO menu_packages (package_name, tier, price_per_guest, pricing_note, photo_path, sort_order) VALUES (?, ?, ?, ?, ?, ?)")->execute(array_merge($values, [$next_order]));
-                    $id = (int)$pdo->lastInsertId();
+                    $id = jq_insert_id($pdo, 'menu_packages', 'package_id');
                 } else {
                     $pdo->prepare("UPDATE menu_packages SET package_name=?, tier=?, price_per_guest=?, pricing_note=?, photo_path=?, sort_order=? WHERE package_id=?")->execute(array_merge($values, [(int)($_POST['sort_order'] ?? 0), $id]));
                 }
@@ -148,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $stmt = $pdo->prepare("SELECT photo_path FROM menu_packages WHERE package_id=?");
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
-                if ($row && $row['photo_path'] && file_exists($row['photo_path'])) @unlink($row['photo_path']);
+                if ($row && $row['photo_path']) jq_file_delete($row['photo_path']);
                 $pdo->prepare("DELETE FROM menu_packages WHERE package_id=?")->execute([$id]);
                 setFlash('Package deleted.', 'success');
                 break;
@@ -190,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $stmt = $pdo->prepare("SELECT photo_path FROM menu_items WHERE item_id=?");
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
-                if ($row && $row['photo_path'] && file_exists($row['photo_path'])) @unlink($row['photo_path']);
+                if ($row && $row['photo_path']) jq_file_delete($row['photo_path']);
                 $pdo->prepare("DELETE FROM menu_items WHERE item_id=?")->execute([$id]);
                 setFlash('Food item deleted.', 'success');
                 break;
@@ -214,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $pdo->beginTransaction();
                 if ($action === 'add_bundle') {
                     $pdo->prepare("INSERT INTO menu_bundles (bundle_name, bundle_type, price, price_mode, order_note, photo_path, guests_covered) VALUES (?, ?, ?, ?, ?, ?, ?)")->execute($values);
-                    $id = (int)$pdo->lastInsertId();
+                    $id = jq_insert_id($pdo, 'menu_bundles', 'bundle_id');
                 } else {
                     $pdo->prepare("UPDATE menu_bundles SET bundle_name=?, bundle_type=?, price=?, price_mode=?, order_note=?, photo_path=?, guests_covered=? WHERE bundle_id=?")->execute(array_merge($values, [$id]));
                 }
@@ -228,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $stmt = $pdo->prepare("SELECT photo_path FROM menu_bundles WHERE bundle_id=?");
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
-                if ($row && $row['photo_path'] && file_exists($row['photo_path'])) @unlink($row['photo_path']);
+                if ($row && $row['photo_path']) jq_file_delete($row['photo_path']);
                 $pdo->prepare("DELETE FROM menu_bundles WHERE bundle_id=?")->execute([$id]);
                 setFlash('Bundle deleted.', 'success');
                 break;
@@ -238,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
             $pdo->rollBack();
         }
         error_log('food_menus.php: ' . $e->getMessage());
-        setFlash((int)($e->errorInfo[1] ?? 0) === 1062 ? 'That name already exists. Each package, bundle and food item needs its own name.' : 'The change could not be saved. Nothing was changed.', 'danger');
+        setFlash(jq_is_duplicate($e) ? 'That name already exists. Each package, bundle and food item needs its own name.' : 'The change could not be saved. Nothing was changed.', 'danger');
     }
     if ($menu_photo_error) {
         setFlash('The picture was not saved: ' . $menu_photo_error, 'danger');
@@ -347,7 +345,7 @@ include 'includes/header.php';
             <div class="col-lg-4 col-md-6 mb-4 d-flex">
                 <div class="menu-card">
                     <div class="menu-thumb">
-                        <?php if ($p['photo_path'] && file_exists($p['photo_path'])): ?>
+                        <?php if ($p['photo_path'] && jq_file_exists($p['photo_path'])): ?>
                         <img src="<?php echo htmlspecialchars($p['photo_path']); ?>" alt="<?php echo htmlspecialchars($p['package_name']); ?>">
                         <?php else: ?>
                         <i class="bx <?php echo htmlspecialchars($p['icon'] ?: 'bx-restaurant'); ?> no-img"></i>
@@ -388,7 +386,7 @@ include 'includes/header.php';
             <div class="col-lg-3 col-md-6 mb-4 d-flex">
                 <div class="menu-card">
                     <div class="menu-thumb">
-                        <?php if ($it['photo_path'] && file_exists($it['photo_path'])): ?>
+                        <?php if ($it['photo_path'] && jq_file_exists($it['photo_path'])): ?>
                         <img src="<?php echo htmlspecialchars($it['photo_path']); ?>" alt="<?php echo htmlspecialchars($it['item_name']); ?>" loading="lazy">
                         <?php else: ?>
                         <i class="bx bx-dish no-img"></i>
@@ -429,7 +427,7 @@ include 'includes/header.php';
             <div class="col-lg-4 col-md-6 mb-4 d-flex">
                 <div class="menu-card">
                     <div class="menu-thumb">
-                        <?php if ($b['photo_path'] && file_exists($b['photo_path'])): ?>
+                        <?php if ($b['photo_path'] && jq_file_exists($b['photo_path'])): ?>
                         <img src="<?php echo htmlspecialchars($b['photo_path']); ?>" alt="<?php echo htmlspecialchars($b['bundle_name']); ?>" loading="lazy">
                         <?php else: ?>
                         <i class="bx bx-gift no-img"></i>

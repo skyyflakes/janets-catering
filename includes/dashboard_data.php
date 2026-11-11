@@ -21,7 +21,7 @@ function jq_dashboard_data(PDO $pdo): array
         $active = "is_archived = 0 AND status IN ('Pending','Approved')";
         $earning = "is_archived = 0 AND status IN ('Pending','Approved','Completed')";
         $total = (float)$pdo->query("SELECT COALESCE(SUM(grand_total),0) FROM event_bookings WHERE $earning")->fetchColumn();
-        $upcoming = (float)$pdo->query("SELECT COALESCE(SUM(grand_total),0) FROM event_bookings WHERE $active AND event_date >= CURDATE()")->fetchColumn();
+        $upcoming = (float)$pdo->query("SELECT COALESCE(SUM(grand_total),0) FROM event_bookings WHERE $active AND event_date >= CURRENT_DATE")->fetchColumn();
         $recent = $pdo->query("SELECT booking_id, booking_ref, event_name, package_name, fullname, event_date, headcount, grand_total, status
                                  FROM event_bookings WHERE is_archived = 0 ORDER BY created_at DESC, booking_id DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($recent as &$r) {
@@ -31,10 +31,13 @@ function jq_dashboard_data(PDO $pdo): array
         $popular = $pdo->query("SELECT package_name, COUNT(*) AS booking_count, COALESCE(SUM(grand_total),0) AS revenue
                                   FROM event_bookings WHERE $earning AND package_name IS NOT NULL
                                  GROUP BY package_name ORDER BY booking_count DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
-        $monthly = $pdo->query("SELECT DATE_FORMAT(event_date, '%Y-%m') AS month, COUNT(*) AS booking_count, COALESCE(SUM(grand_total),0) AS revenue
-                                  FROM event_bookings
-                                 WHERE $earning AND event_date >= DATE_SUB(CURDATE(), INTERVAL 36 MONTH)
-                                 GROUP BY DATE_FORMAT(event_date, '%Y-%m') ORDER BY month ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $ym = jq_sql_ym('event_date');
+        $st = $pdo->prepare("SELECT $ym AS month, COUNT(*) AS booking_count, COALESCE(SUM(grand_total),0) AS revenue
+                               FROM event_bookings
+                              WHERE $earning AND event_date >= ?
+                              GROUP BY $ym ORDER BY 1 ASC");
+        $st->execute([date('Y-m-d', strtotime('-36 months'))]);
+        $monthly = $st->fetchAll(PDO::FETCH_ASSOC);
         return jq_dashboard_shape($counts, $recent, $popular, $monthly, $packages, $items, $total, $upcoming);
     } catch (Throwable $e) {
         error_log('Dashboard query error: ' . $e->getMessage());

@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hashed_password = password_hash($password, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, email, first_name, last_name, contact_number, role, status, is_verified, address, region_code, province_code, city_code, barangay_code, street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$username, $hashed_password, $email, $first_name, $last_name, $contact, $new_role, $address, $region_code, $province_code, $city_code, $barangay_code, $street_address, $postal_code]);
-                $new_user_id = (int)$pdo->lastInsertId();
+                $new_user_id = jq_insert_id($pdo, 'users', 'id');
 
                 $mail = jq_send_verification($pdo, ['id' => $new_user_id, 'username' => $username, 'email' => $email, 'first_name' => $first_name]);
                 if ($mail['success']) {
@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } catch (PDOException $e) {
                 // The unique indexes are the final guard against two people submitting at once
-                $error = (int)($e->errorInfo[1] ?? 0) === 1062
+                $error = jq_is_duplicate($e)
                     ? 'That username, email or phone number was just registered by another account.'
                     : 'The account could not be created.';
                 error_log('create_account: ' . $e->getMessage());
@@ -445,7 +445,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td>
                                     <div class="acc-user">
                                         <div class="nav-user-avatar acc-avatar">
-                                            <?php if (!empty($user['profile_photo']) && file_exists($user['profile_photo'])): ?>
+                                            <?php if (!empty($user['profile_photo']) && jq_file_exists($user['profile_photo'])): ?>
                                                 <img src="<?php echo htmlspecialchars($user['profile_photo']); ?>" alt="Profile">
                                             <?php else: ?>
                                                 <?php echo htmlspecialchars(mb_strtoupper(mb_substr($user['first_name'] ?: $user['username'], 0, 1))); ?>

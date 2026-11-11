@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('Client details updated. Past bookings keep the details they were made with.', 'success');
         } catch (PDOException $e) {
             error_log('clients.php: ' . $e->getMessage());
-            setFlash((int)($e->errorInfo[1] ?? 0) === 1062 ? 'Another client already has this name and contact number.' : 'The client could not be saved. Nothing was changed.', 'danger');
+            setFlash(jq_is_duplicate($e) ? 'Another client already has this name and contact number.' : 'The client could not be saved. Nothing was changed.', 'danger');
         }
     }
     redirect('clients.php?id=' . $id);

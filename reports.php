@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'archive_report':
-                $stmt = $pdo->prepare("UPDATE reports SET is_archived = 1, archived_at = NOW(), archive_expires_at = DATE_ADD(NOW(), INTERVAL " . JQ_ARCHIVE_RETENTION_DAYS . " DAY), archived_by = ? WHERE id = ? AND is_archived = 0");
+                $stmt = $pdo->prepare("UPDATE reports SET is_archived = 1, archived_at = NOW(), archive_expires_at = " . jq_sql_add('NOW()', JQ_ARCHIVE_RETENTION_DAYS, 'DAY') . ", archived_by = ? WHERE id = ? AND is_archived = 0");
                 $stmt->execute([(int)$_SESSION['user_id'], $post_id]);
                 setFlash($stmt->rowCount() > 0
                     ? 'Report archived. It will be permanently deleted after ' . JQ_ARCHIVE_RETENTION_DAYS . ' days unless you restore it.'

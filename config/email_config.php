@@ -36,18 +36,20 @@
  */
 
 // ==================== GMAIL SMTP CONFIGURATION ====================
-define('SMTP_HOST', 'smtp.gmail.com');
-define('SMTP_PORT', 587);                                              // TLS Port
-define('SMTP_SECURE', 'tls');                                          // Use 'tls' for port 587
-define('SMTP_USERNAME', 'veranosean91@gmail.com');                        // Gmail that OWNS the App Password (was misspelled "gmaill.com")
+if (!defined('SMTP_HOST')) define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp.gmail.com');
+if (!defined('SMTP_PORT')) define('SMTP_PORT', (int)(getenv('SMTP_PORT') ?: 587));                                              // TLS Port
+if (!defined('SMTP_SECURE')) define('SMTP_SECURE', getenv('SMTP_SECURE') !== false ? (string)getenv('SMTP_SECURE') : 'tls');                                          // Use 'tls' for port 587
+if (!defined('SMTP_USERNAME')) define('SMTP_USERNAME', getenv('SMTP_USERNAME') ?: 'veranosean91@gmail.com');                        // Gmail that OWNS the App Password (was misspelled "gmaill.com")
 // The Gmail App Password is kept outside the web folder (C:\xampp\janets_catering_private\mail_secret.php).
 // Set JQ_PRIVATE_DIR to use another folder. See that file to change the password.
 $jq_private_dir = getenv('JQ_PRIVATE_DIR') ?: dirname(__DIR__, 3) . '/janets_catering_private';
 $jq_mail_secret = is_file($jq_private_dir . '/mail_secret.php') ? include $jq_private_dir . '/mail_secret.php' : [];
-if (!defined('SMTP_PASSWORD')) { define('SMTP_PASSWORD', is_array($jq_mail_secret) ? (string)($jq_mail_secret['smtp_password'] ?? '') : ''); }
+// When hosted (Vercel), the App Password comes from the SMTP_PASSWORD environment variable instead of the file.
+// SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USERNAME and SMTP_FROM_EMAIL can be set the same way.
+if (!defined('SMTP_PASSWORD')) { define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: (is_array($jq_mail_secret) ? (string)($jq_mail_secret['smtp_password'] ?? '') : '')); }
 unset($jq_mail_secret, $jq_private_dir);
-define('SMTP_FROM_EMAIL', 'veranosean91@gmail.com');                           // Always the same as SMTP_USERNAME (Gmail rejects/rewrites other senders)
-define('SMTP_FROM_NAME', "Janet's Catering");                  // Display name for emails
+if (!defined('SMTP_FROM_EMAIL')) define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: (getenv('SMTP_USERNAME') ?: 'veranosean91@gmail.com'));                           // Always the same as SMTP_USERNAME (Gmail rejects/rewrites other senders)
+if (!defined('SMTP_FROM_NAME')) define('SMTP_FROM_NAME', "Janet's Catering");                  // Display name for emails
 
 // Troubleshooting switches
 define('SMTP_DEBUG', false);               // true = login page shows the exact mail error and logs the SMTP conversation (troubleshooting only)
@@ -56,7 +58,8 @@ define('SMTP_ALLOW_SELF_SIGNED', false);    // set true ONLY on local XAMPP/WAMP
 // ==================== EMAIL SETTINGS ====================
 // Address people open the system at, without a trailing slash. Verification links are built from it, never from
 // the request, so a forged Host header cannot send a token elsewhere. Change it when the system moves to a real domain.
-define('APP_BASE_URL', 'http://localhost/VERANO');
+// Address used in emailed links. When hosted, set APP_BASE_URL (e.g. https://janets-catering.vercel.app).
+if (!defined('APP_BASE_URL')) define('APP_BASE_URL', getenv('APP_BASE_URL') ?: 'http://localhost/VERANO');
 define('EMAIL_VERIFICATION_EXPIRY', 30);            // Minutes until an account verification link and code expire
 define('EMAIL_VERIFICATION_MAX_ATTEMPTS', 5);       // Wrong tries before that code stops working
 define('EMAIL_VERIFICATION_RESEND_SECONDS', 60);    // Wait time between verification emails

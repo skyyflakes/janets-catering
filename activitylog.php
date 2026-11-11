@@ -191,11 +191,11 @@ case 'archive':
                 $reason = $reason !== '' ? $reason : ($toArchive ? 'Archived via the Activity Log module' : 'Restored via the Activity Log module');
                 $in = implode(',', array_fill(0, count($ids), '?'));
                 $pdo->beginTransaction();
-                $pdo->prepare("SET @app_log_mgmt = 1, @app_log_reason = ?")->execute([$reason]);
+                jq_set_audit_vars($pdo, ['log_mgmt' => 1, 'log_reason' => $reason]);
                 $st = $pdo->prepare("UPDATE activity_logs SET is_archived = ? WHERE id IN ($in) AND is_archived = ?");
                 $st->execute(array_merge([$toArchive ? 1 : 0], $ids, [$toArchive ? 0 : 1]));
                 $affected = $st->rowCount();
-                $pdo->exec("SET @app_log_mgmt = 0, @app_log_reason = NULL");
+                jq_set_audit_vars($pdo, ['log_mgmt' => 0, 'log_reason' => null]);
                 $pdo->commit();
                 $list = '#' . implode(', #', array_slice($ids, 0, 20)) . (count($ids) > 20 ? ' …' : '');
                 logActivity($pdo, $toArchive ? 'LOG_ARCHIVE' : 'LOG_RESTORE', 'Activity Log',
@@ -221,7 +221,7 @@ case 'archive':
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        try { $pdo->exec("SET @app_log_mgmt = 0, @app_log_reason = NULL"); } catch (Throwable $e2) {}
+        try { jq_set_audit_vars($pdo, ['log_mgmt' => 0, 'log_reason' => null]); } catch (Throwable $e2) {}
         error_log('activitylog.php ' . $op . ': ' . $e->getMessage());
         setFlash('The action could not be completed: ' . preg_replace('/^SQLSTATE\[\w+\]: [^:]*: \d+ /', '', $e->getMessage()), 'danger');
     }
@@ -267,13 +267,15 @@ unset($_GET['per_page']);
 $stats = ['today' => 0, 'changes' => 0, 'logins' => 0, 'failed' => 0];
 try {
     $in = implode(',', array_fill(0, count(AL_CHANGE_ACTIONS), '?'));
+    $todayStart = date('Y-m-d 00:00:00');
+    $weekStart = date('Y-m-d 00:00:00', strtotime('-6 days'));
     $st = $pdo->prepare("
-        SELECT SUM(created_at >= CURDATE()) AS today,
-               SUM(created_at >= CURDATE() AND action IN ($in)) AS changes,
-               SUM(created_at >= CURDATE() AND action = 'LOGIN') AS logins,
-               SUM(created_at >= CURDATE() - INTERVAL 6 DAY AND action = 'LOGIN_FAILED') AS failed
-          FROM activity_logs WHERE is_archived = 0 AND created_at >= CURDATE() - INTERVAL 6 DAY");
-    $st->execute(AL_CHANGE_ACTIONS);
+        SELECT SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS today,
+               SUM(CASE WHEN created_at >= ? AND action IN ($in) THEN 1 ELSE 0 END) AS changes,
+               SUM(CASE WHEN created_at >= ? AND action = 'LOGIN' THEN 1 ELSE 0 END) AS logins,
+               SUM(CASE WHEN action = 'LOGIN_FAILED' THEN 1 ELSE 0 END) AS failed
+          FROM activity_logs WHERE is_archived = 0 AND created_at >= ?");
+    $st->execute(array_merge([$todayStart, $todayStart], AL_CHANGE_ACTIONS, [$todayStart, $weekStart]));
     $stats = array_map('intval', $st->fetch(PDO::FETCH_ASSOC) ?: $stats);
 } catch (Throwable $e) {
     error_log('activitylog stats: ' . $e->getMessage());

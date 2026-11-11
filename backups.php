@@ -23,6 +23,25 @@ require_once 'includes/account_security.php';
 $role  = jq_require_roles($pdo, ['ADMIN'], 'Backup & Restore');
 $actor = jq_actor($pdo);
 
+// Hosted on Vercel + Supabase: the database is backed up by Supabase, and the server cannot keep backup files.
+if (jq_is_hosted()) {
+    require_once 'includes/header.php';
+    ?>
+    <div class="card"><div class="card-body">
+        <h4 class="mb-2" style="color:var(--heading-color);font-weight:600;"><i class="bx bx-data me-1"></i> Backup &amp; Restore</h4>
+        <p class="mb-2">This online copy of the system keeps its database on <strong>Supabase</strong>, which makes the backups.
+           Backup files cannot be created or restored from this page while the system runs online.</p>
+        <ul class="mb-2">
+            <li>To restore an earlier state, the Owner uses <strong>Database &rarr; Backups</strong> in the Supabase dashboard.</li>
+            <li>To keep a copy on a computer, use <strong>Database &rarr; Backups</strong> there, or the Backup &amp; Restore page of the XAMPP version.</li>
+        </ul>
+        <p class="text-muted mb-0" style="font-size:.875rem;">Uploaded receipts and photos are stored in the same database, so they are included in Supabase's backups.</p>
+    </div></div>
+    <?php
+    require_once 'includes/footer.php';
+    exit;
+}
+
 
 /* =====================================================================
  *  POST actions

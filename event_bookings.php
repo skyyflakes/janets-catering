@@ -31,7 +31,8 @@ $viewer_id = (int)$_SESSION['user_id'];
 // Ensure the archive columns exist (runs once, safe to repeat)
 // ─────────────────────────────────────────────────────────────
 try {
-    $col = $pdo->query("SHOW COLUMNS FROM event_bookings LIKE 'is_archived'")->fetch();
+    // MySQL only: the PostgreSQL database is created complete.
+    $col = jq_is_pg() ? true : $pdo->query("SHOW COLUMNS FROM event_bookings LIKE 'is_archived'")->fetch();
     if (!$col) {
         $pdo->exec("ALTER TABLE event_bookings ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN archived_at DATETIME NULL");
     }
@@ -84,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_action'])) {
                     $pdo->prepare("UPDATE event_types SET event_type_name = ? WHERE event_type_id = ?")->execute([$name, (int)$_POST['event_type_id']]);
                     setFlash('Event type renamed.', 'success');
                 } catch (PDOException $e) {
-                    if ((int)($e->errorInfo[1] ?? 0) !== 1062) {
+                    if (!jq_is_duplicate($e)) {
                         throw $e;
                     }
                     setFlash('That event type already exists.', 'danger');
@@ -673,7 +674,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                                   backdrop_id, backdrop_name, backdrop_path, package_id, package_name, package_price, client_id, booking_ref, status, created_by)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)")
                 ->execute(array_merge($fields, [$client_id, $ref, $viewer_id]));
-            $booking_id = (int)$pdo->lastInsertId();
+            $booking_id = jq_insert_id($pdo, 'event_bookings', 'booking_id');
         }
         $totals = jq_save_booking_lines($pdo, $booking_id, $v['headcount'], $v['package_id'], $v['package_name'], $v['package_price'],
             (array)($_POST['selected_items'] ?? []), (array)($_POST['selected_bundles'] ?? []), (array)($_POST['item_qty'] ?? []), (array)($_POST['bundle_qty'] ?? []));
@@ -739,7 +740,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_id'])) {
     try {
         $stmt = $pdo->prepare("UPDATE event_bookings
                                   SET pre_archive_status = status, status = 'Cancelled', is_archived = 1, archived_at = NOW(),
-                                      archive_expires_at = DATE_ADD(NOW(), INTERVAL " . JQ_ARCHIVE_RETENTION_DAYS . " DAY), archived_by = ?
+                                      archive_expires_at = " . jq_sql_add('NOW()', JQ_ARCHIVE_RETENTION_DAYS, 'DAY') . ", archived_by = ?
                                 WHERE booking_id = ? AND is_archived = 0");
         $stmt->execute([(int)$_SESSION['user_id'], $archive_id]);
         setFlash($stmt->rowCount() > 0

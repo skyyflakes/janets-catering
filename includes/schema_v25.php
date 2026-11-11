@@ -231,10 +231,13 @@ function jq_v25_fill_inclusions(PDO $pdo): int
         ['menu_bundles', 'bundle_id', 'bundle_name', 'bundle_inclusions', 'order_note', $curated['bundles']],
     ];
     foreach ($sets as [$table, $pk, $nameCol, $incTable, $noteCol, $known]) {
-        $rows = $pdo->query("SELECT t.`$pk` AS id, t.`$nameCol` AS name, t.description FROM `$table` t
-                              WHERE NOT EXISTS (SELECT 1 FROM `$incTable` i WHERE i.`$pk` = t.`$pk`)")->fetchAll(PDO::FETCH_ASSOC);
-        $insert = $pdo->prepare("INSERT IGNORE INTO `$incTable` (`$pk`, inclusion_text, sort_order) VALUES (?, ?, ?)");
-        $note = $pdo->prepare("UPDATE `$table` SET `$noteCol` = ? WHERE `$pk` = ? AND (`$noteCol` IS NULL OR `$noteCol` = '')");
+        // Plain identifiers (fixed names above), so the same SQL runs on MySQL and PostgreSQL
+        $rows = $pdo->query("SELECT t.$pk AS id, t.$nameCol AS name, t.description FROM $table t
+                              WHERE NOT EXISTS (SELECT 1 FROM $incTable i WHERE i.$pk = t.$pk)")->fetchAll(PDO::FETCH_ASSOC);
+        $insert = $pdo->prepare(jq_is_pg()
+            ? "INSERT INTO $incTable ($pk, inclusion_text, sort_order) VALUES (?, ?, ?) ON CONFLICT DO NOTHING"
+            : "INSERT IGNORE INTO $incTable ($pk, inclusion_text, sort_order) VALUES (?, ?, ?)");
+        $note = $pdo->prepare("UPDATE $table SET $noteCol = ? WHERE $pk = ? AND ($noteCol IS NULL OR $noteCol = '')");
         foreach ($rows as $row) {
             [$rowNote, $list] = $known[$row['name']] ?? ['', jq_v25_split_text($row['description'])];
             foreach (array_values($list) as $i => $text) {
@@ -254,11 +257,14 @@ function jq_v25_fill_inclusions(PDO $pdo): int
 function jq_v25_link_inclusions(PDO $pdo): void
 {
     foreach (['package_inclusions', 'bundle_inclusions'] as $t) {
-        $pdo->exec("UPDATE `$t` i
-                      JOIN (SELECT n.inclusion_id, MIN(m.item_id) AS item_id
-                              FROM `$t` n JOIN menu_items m ON m.item_name LIKE CONCAT(n.inclusion_text, '%')
-                             WHERE n.item_id IS NULL GROUP BY n.inclusion_id HAVING COUNT(*) = 1) x ON x.inclusion_id = i.inclusion_id
-                       SET i.item_id = x.item_id");
+        // Found first, then updated one by one: works the same on MySQL and PostgreSQL
+        $found = $pdo->query("SELECT n.inclusion_id, MIN(m.item_id) AS item_id
+                                FROM $t n JOIN menu_items m ON m.item_name LIKE CONCAT(n.inclusion_text, '%')
+                               WHERE n.item_id IS NULL GROUP BY n.inclusion_id HAVING COUNT(*) = 1")->fetchAll(PDO::FETCH_ASSOC);
+        $set = $pdo->prepare("UPDATE $t SET item_id = ? WHERE inclusion_id = ?");
+        foreach ($found as $f) {
+            $set->execute([(int)$f['item_id'], (int)$f['inclusion_id']]);
+        }
     }
 }
 

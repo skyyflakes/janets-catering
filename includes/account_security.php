@@ -32,8 +32,9 @@ function jq_record_terms_acceptance(?PDO $pdo, int $userId): void
     }
     try {
         $pdo->prepare('INSERT INTO terms_acceptances (user_id, terms_version, accepted_at, last_accepted_at, ip_address, user_agent)
-                       VALUES (?, ?, NOW(), NOW(), ?, ?)
-                       ON DUPLICATE KEY UPDATE last_accepted_at = NOW(), ip_address = VALUES(ip_address), user_agent = VALUES(user_agent)')
+                       VALUES (?, ?, NOW(), NOW(), ?, ?) ' . (jq_is_pg()
+                       ? 'ON CONFLICT (user_id, terms_version) DO UPDATE SET last_accepted_at = NOW(), ip_address = EXCLUDED.ip_address, user_agent = EXCLUDED.user_agent'
+                       : 'ON DUPLICATE KEY UPDATE last_accepted_at = NOW(), ip_address = VALUES(ip_address), user_agent = VALUES(user_agent)'))
             ->execute([$userId, JQ_TERMS_VERSION, jq_client_ip(), mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255)]);
     } catch (Throwable $e) {
         error_log('Terms acceptance could not be recorded: ' . $e->getMessage());
@@ -168,9 +169,7 @@ function jq_send_verification(PDO $pdo, array $user): array
     $userId = (int)$user['id'];
     // One send at a time per account: a double click cannot create two competing codes.
     $lock = 'jq_verify_' . $userId;
-    $st = $pdo->prepare('SELECT GET_LOCK(?, 0)');
-    $st->execute([$lock]);
-    if ((int)$st->fetchColumn() !== 1) {
+    if (!jq_db_lock($pdo, $lock)) {
         return ['success' => false, 'throttled' => true, 'message' => 'A verification email is already being sent. Please wait a moment.'];
     }
     try {
@@ -188,7 +187,7 @@ function jq_send_verification(PDO $pdo, array $user): array
         jq_store_verification_code($pdo, $userId, (string)$user['email'], $code, hash('sha256', $token));
         return ['success' => true, 'message' => 'Verification email sent to ' . jq_mask_email((string)$user['email']) . '.'];
     } finally {
-        $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]);
+        jq_db_unlock($pdo, $lock);
     }
 }
 
@@ -198,8 +197,8 @@ function jq_store_verification_code(PDO $pdo, int $userId, string $email, string
     $pdo->beginTransaction();
     try {
         $pdo->prepare('UPDATE email_verifications SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL')->execute([$userId]);
-        $pdo->prepare('INSERT INTO email_verifications (user_id, email, code_hash, token_hash, expires_at) VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))')
-            ->execute([$userId, $email, password_hash($code, PASSWORD_DEFAULT), $tokenHash, EMAIL_VERIFICATION_EXPIRY]);
+        $pdo->prepare('INSERT INTO email_verifications (user_id, email, code_hash, token_hash, expires_at) VALUES (?, ?, ?, ?, ' . jq_sql_add('NOW()', (int)EMAIL_VERIFICATION_EXPIRY, 'MINUTE') . ')')
+            ->execute([$userId, $email, password_hash($code, PASSWORD_DEFAULT), $tokenHash]);
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -212,8 +211,8 @@ function jq_store_verification_code(PDO $pdo, int $userId, string $email, string
 /** True when a verification email went out to this user within the resend wait. */
 function jq_verification_recently_sent(PDO $pdo, int $userId): bool
 {
-    $st = $pdo->prepare('SELECT COUNT(*) FROM email_verifications WHERE user_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL ? SECOND)');
-    $st->execute([$userId, EMAIL_VERIFICATION_RESEND_SECONDS]);
+    $st = $pdo->prepare('SELECT COUNT(*) FROM email_verifications WHERE user_id = ? AND created_at > ' . jq_sql_add('NOW()', -(int)EMAIL_VERIFICATION_RESEND_SECONDS, 'SECOND'));
+    $st->execute([$userId]);
     return (int)$st->fetchColumn() > 0;
 }
 
@@ -264,7 +263,7 @@ function jq_verify_code(PDO $pdo, int $userId, string $code): array
         }
         if (!password_verify($code, $row['code_hash'])) {
             $left = EMAIL_VERIFICATION_MAX_ATTEMPTS - (int)$row['attempts'] - 1;
-            $pdo->prepare('UPDATE email_verifications SET attempts = attempts + 1, used_at = IF(? <= 0, NOW(), NULL) WHERE id = ?')->execute([$left, $row['id']]);
+            $pdo->prepare('UPDATE email_verifications SET attempts = attempts + 1, used_at = CASE WHEN ? <= 0 THEN NOW() ELSE NULL END WHERE id = ?')->execute([$left, $row['id']]);
             $pdo->commit();
             return ['success' => false, 'message' => $left > 0
                 ? "Incorrect code. {$left} attempt(s) left. If you received several emails, use the newest."
@@ -273,7 +272,7 @@ function jq_verify_code(PDO $pdo, int $userId, string $code): array
         $retire->execute([$row['id']]);
         if (empty($_SESSION['user_id'])) {
             // Nobody is signed in on the self-service page: credit the account that verified itself.
-            $pdo->prepare('SET @app_user_id = ?, @app_username = ?')->execute([$userId, $user['username']]);
+            jq_set_audit_vars($pdo, ['user_id' => $userId, 'username' => $user['username']]);
         }
         $pdo->prepare('UPDATE users SET is_verified = 1 WHERE id = ?')->execute([$userId]);
         $pdo->commit();
@@ -331,7 +330,7 @@ function jq_verify_token(PDO $pdo, string $token): array
         $pdo->prepare('UPDATE email_verifications SET used_at = NOW() WHERE id = ?')->execute([$row['id']]);
         if (empty($_SESSION['user_id'])) {
             // Nobody is signed in when a link is opened: credit the account that verified itself.
-            $pdo->prepare('SET @app_user_id = ?, @app_username = ?')->execute([$row['user_id'], $row['username']]);
+            jq_set_audit_vars($pdo, ['user_id' => $row['user_id'], 'username' => $row['username']]);
         }
         $pdo->prepare('UPDATE users SET is_verified = 1 WHERE id = ?')->execute([$row['user_id']]);
         $pdo->commit();

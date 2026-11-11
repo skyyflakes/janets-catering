@@ -96,7 +96,7 @@ function uploadSurveyPhoto($file, $upload_dir, ?string &$error = null)
     if ($ext === null) return null;
 
     $path = $upload_dir . 'survey_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-    if (!move_uploaded_file($file['tmp_name'], $path)) {
+    if (!jq_file_save_upload($file['tmp_name'], $path)) {
         $error = 'The photo could not be saved. Please try again.';
         return null;
     }
@@ -111,7 +111,7 @@ if (!$pdo) {
 /* ------------------------------------------------------------------
  * Table setup
  * ------------------------------------------------------------------ */
-try {
+if (!jq_is_pg()) try { // MySQL only: the PostgreSQL database is created complete
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `client_surveys` (
             `survey_id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -132,7 +132,7 @@ try {
 }
 
 // Older installs: add booking_id + unique index (one survey per booking)
-try {
+if (!jq_is_pg()) try {
     $has_col = $pdo->query("SHOW COLUMNS FROM `client_surveys` LIKE 'booking_id'")->fetchColumn();
     if (!$has_col) {
         $pdo->exec("ALTER TABLE `client_surveys` ADD COLUMN `booking_id` INT DEFAULT NULL AFTER `survey_id`");
@@ -402,9 +402,7 @@ $is_admin = in_array(jq_require_roles($pdo, ['ADMIN', 'OWNER'], 'Client Surveys'
 
 // Uploads folder
 $upload_dir = 'uploads/surveys/';
-if (!is_dir($upload_dir)) {
-    mkdir($upload_dir, 0755, true);
-}
+jq_file_dir($upload_dir);
 
 // Finished events that do not have a survey yet
 function getPendingBookings(PDO $pdo)
@@ -414,7 +412,7 @@ function getPendingBookings(PDO $pdo)
             SELECT b.booking_id, b.booking_ref, b.fullname, b.event_name, b.event_date
             FROM event_bookings b
             LEFT JOIN client_surveys s ON s.booking_id = b.booking_id
-            WHERE b.is_archived = 0 AND (b.status = 'Completed' OR (b.status = 'Approved' AND b.event_date <= CURDATE())) AND s.survey_id IS NULL
+            WHERE b.is_archived = 0 AND (b.status = 'Completed' OR (b.status = 'Approved' AND b.event_date <= CURRENT_DATE)) AND s.survey_id IS NULL
             ORDER BY b.event_date DESC, b.booking_id DESC
         ");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -499,8 +497,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     break;
                 }
                 if ($new_photo) {
-                    if ($photo_path && file_exists($photo_path)) {
-                        unlink($photo_path);
+                    if ($photo_path) {
+                        jq_file_delete($photo_path);
                     }
                     $photo_path = $new_photo;
                 }
@@ -520,8 +518,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $stmt = $pdo->prepare("SELECT photo_path FROM client_surveys WHERE survey_id = ?");
                 $stmt->execute([$survey_id]);
                 $photo = $stmt->fetchColumn();
-                if ($photo && file_exists($photo)) {
-                    unlink($photo);
+                if ($photo) {
+                    jq_file_delete($photo);
                 }
 
                 $stmt = $pdo->prepare("DELETE FROM client_surveys WHERE survey_id = ?");
@@ -838,7 +836,7 @@ include 'includes/header.php';
     <div class="col-lg-4 col-md-6 mb-4">
         <div class="survey-card">
             <div class="survey-photo">
-                <?php if ($survey['photo_path'] && file_exists($survey['photo_path'])): ?>
+                <?php if ($survey['photo_path'] && jq_file_exists($survey['photo_path'])): ?>
                 <img src="<?php echo e($survey['photo_path']); ?>" alt="Survey Photo">
                 <?php else: ?>
                 <i class="bx bx-image no-photo"></i>

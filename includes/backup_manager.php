@@ -1218,6 +1218,20 @@ function jq_backup_register_scheduler(?PDO $pdo): void
     if (!$pdo || PHP_SAPI === 'cli') {
         return;
     }
+    if (jq_is_hosted()) {
+        // Hosted: Supabase keeps the database backups, and there is no scheduled task, so the archive clean-up
+        // runs from page visits at most once an hour.
+        $last = jq_setting_get($pdo, 'retention_last_run');
+        if (!$last || time() - strtotime($last) >= 3600) {
+            try {
+                require_once __DIR__ . '/archive_manager.php';
+                jq_purge_expired_archives($pdo);
+            } catch (Throwable $e) {
+                error_log('Archive clean-up (hosted) failed: ' . $e->getMessage());
+            }
+        }
+        return;
+    }
     register_shutdown_function(static function () use ($pdo) {
         try {
             if (!jq_backup_is_due(jq_backup_settings($pdo), jq_now())) {

@@ -40,6 +40,7 @@ require_once __DIR__ . '/schema_v26.php';
 require_once __DIR__ . '/schema_v27.php';
 require_once __DIR__ . '/schema_v28.php';
 require_once __DIR__ . '/schema_v29.php';
+require_once __DIR__ . '/pg_audit.php';
 
 /** Bump when the trigger / table definitions below change: forces a re-sync. */
 const JQ_AUDIT_SCHEMA_VERSION = '2.9.0';
@@ -133,7 +134,9 @@ function jq_json_response(array $payload, int $status = 200): void
 
 function jq_table_exists(PDO $pdo, string $table): bool
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+    $stmt = $pdo->prepare(jq_is_pg()
+        ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?"
+        : "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
     $stmt->execute([$table]);
     return (int)$stmt->fetchColumn() > 0;
 }
@@ -144,7 +147,9 @@ function jq_column_exists(PDO $pdo, string $table, string $column): bool
     $key = $table . '.' . $column;
     if (!array_key_exists($key, $cache)) {
         try {
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+            $stmt = $pdo->prepare((jq_is_pg()
+                ? "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?"
+                : "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?"));
             $stmt->execute([$table, $column]);
             $cache[$key] = (int)$stmt->fetchColumn() > 0;
         } catch (Throwable $e) {
@@ -313,9 +318,9 @@ function jq_setting_get(PDO $pdo, string $key, ?string $default = null): ?string
 function jq_setting_set(PDO $pdo, string $key, ?string $value, ?int $userId = null): void
 {
     $stmt = $pdo->prepare("
-        INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)
-    ");
+        INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?) " . (jq_is_pg()
+        ? "ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_by = EXCLUDED.updated_by"
+        : "ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)"));
     $stmt->execute([$key, $value, $userId]);
 }
 
@@ -457,6 +462,26 @@ function jq_ensure_audit_schema(?PDO $pdo, bool $force = false): array
         return $result;
     }
     $ran = true;
+
+    if (jq_is_pg()) {
+        // PostgreSQL (Supabase) is created complete from database/postgres/janets_catering_pg.sql, so the MySQL
+        // upgrade steps do not apply. Only the activity-log triggers are checked, and reinstalled if missing.
+        try {
+            $count = (int)$pdo->query("SELECT COUNT(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'trg\_jq\_%'")->fetchColumn();
+            if ($force || $count < 8 + count(jq_audited_tables()) - 2) {
+                jq_pg_install_triggers($pdo);
+                $result['rebuilt'] = true;
+                $result['messages'][] = 'Audit triggers synchronized.';
+            }
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $_SESSION[$sessionKey] = time();
+            }
+        } catch (Throwable $e) {
+            $result = ['ok' => false, 'messages' => ['audit triggers: ' . $e->getMessage()], 'rebuilt' => false];
+            error_log('[audit schema] ' . $e->getMessage());
+        }
+        return $result;
+    }
 
     $step = static function (string $label, callable $fn) use (&$result) {
         try {
@@ -820,7 +845,9 @@ function jq_migrate_v24(PDO $pdo, array &$result): void
 /** Uncached column check (migrations change columns during the request). */
 function jq_column_exists_fresh(PDO $pdo, string $table, string $column): bool
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+    $stmt = $pdo->prepare((jq_is_pg()
+                ? "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?"
+                : "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?"));
     $stmt->execute([$table, $column]);
     return (int)$stmt->fetchColumn() > 0;
 }

@@ -2284,7 +2284,7 @@
                     $hdr_name = trim((string)($current_user['first_name'] ?? '') . ' ' . (string)($current_user['last_name'] ?? ''));
                     $hdr_name = $hdr_name !== '' ? $hdr_name : (string)($current_user['username'] ?? $_SESSION['username'] ?? 'User');
                     $hdr_role = (string)($current_user['role'] ?? $_SESSION['role'] ?? '');
-                    $hdr_photo = !empty($current_user['profile_photo']) && is_file($current_user['profile_photo']) ? $current_user['profile_photo'] : null;
+                    $hdr_photo = !empty($current_user['profile_photo']) && jq_file_exists($current_user['profile_photo']) ? $current_user['profile_photo'] : null;
                     ?>
                 </div>
 

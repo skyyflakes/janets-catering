@@ -93,7 +93,7 @@ function jq_add_event_type(PDO $pdo, string $rawName): array
         $pdo->prepare("INSERT INTO event_types (event_type_name, sort_order) VALUES (?, 100)")->execute([$name]);
         return ['ok' => true, 'existing' => false, 'name' => $name, 'message' => 'Event type "' . $name . '" added.'];
     } catch (PDOException $e) {
-        if ((int)($e->errorInfo[1] ?? 0) !== 1062) {
+        if (!jq_is_duplicate($e)) {
             throw $e;
         }
     }
@@ -119,7 +119,7 @@ function jq_event_types(PDO $pdo, bool $activeOnly = true): array
 function jq_catalog_inclusions(PDO $pdo, string $kind, int $id): array
 {
     [$table, $pk] = $kind === 'package' ? ['package_inclusions', 'package_id'] : ['bundle_inclusions', 'bundle_id'];
-    $st = $pdo->prepare("SELECT inclusion_text FROM `$table` WHERE `$pk` = ? ORDER BY sort_order, inclusion_id");
+    $st = $pdo->prepare("SELECT inclusion_text FROM $table WHERE $pk = ? ORDER BY sort_order, inclusion_id");
     $st->execute([$id]);
     return $st->fetchAll(PDO::FETCH_COLUMN);
 }
@@ -129,7 +129,7 @@ function jq_all_inclusions(PDO $pdo, string $kind): array
 {
     [$table, $pk] = $kind === 'package' ? ['package_inclusions', 'package_id'] : ['bundle_inclusions', 'bundle_id'];
     $out = [];
-    foreach ($pdo->query("SELECT `$pk` AS owner, inclusion_text FROM `$table` ORDER BY sort_order, inclusion_id") as $r) {
+    foreach ($pdo->query("SELECT $pk AS owner, inclusion_text FROM $table ORDER BY sort_order, inclusion_id") as $r) {
         $out[(int)$r['owner']][] = $r['inclusion_text'];
     }
     return $out;
@@ -150,8 +150,8 @@ function jq_save_catalog_inclusions(PDO $pdo, string $kind, int $id, string $tex
             $lines[] = mb_substr($line, 0, 200);
         }
     }
-    $pdo->prepare("DELETE FROM `$table` WHERE `$pk` = ?")->execute([$id]);
-    $ins = $pdo->prepare("INSERT INTO `$table` (`$pk`, inclusion_text, sort_order) VALUES (?, ?, ?)");
+    $pdo->prepare("DELETE FROM $table WHERE $pk = ?")->execute([$id]);
+    $ins = $pdo->prepare("INSERT INTO $table ($pk, inclusion_text, sort_order) VALUES (?, ?, ?)");
     foreach ($lines as $i => $line) {
         $ins->execute([$id, $line, $i + 1]);
     }
@@ -340,7 +340,7 @@ function jq_record_payment(PDO $pdo, int $bookingId, array $input, int $userId, 
         if ($problem !== null) {
             $pdo->rollBack();
             if ($stored) {
-                @unlink($stored['path']);
+                jq_file_delete($stored['path']);
             }
             return ['ok' => false, 'message' => $problem];
         }
@@ -353,7 +353,7 @@ function jq_record_payment(PDO $pdo, int $bookingId, array $input, int $userId, 
             $pdo->rollBack();
         }
         if ($stored) {
-            @unlink($stored['path']);
+            jq_file_delete($stored['path']);
         }
         error_log('record payment: ' . $e->getMessage());
         return ['ok' => false, 'message' => 'The payment could not be saved. Nothing was changed.'];
@@ -404,7 +404,7 @@ function jq_attach_receipt(PDO $pdo, int $bookingId, int $paymentId, ?array $fil
         }
         if ($problem !== null) {
             $pdo->rollBack();
-            @unlink(__DIR__ . '/../' . $stored['path']);
+            jq_file_delete($stored['path']);
             return ['ok' => false, 'message' => $problem];
         }
         $replacing = $p['verification_status'] === 'Rejected';
@@ -421,7 +421,7 @@ function jq_attach_receipt(PDO $pdo, int $bookingId, int $paymentId, ?array $fil
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        @unlink(__DIR__ . '/../' . $stored['path']);
+        jq_file_delete($stored['path']);
         error_log('attach receipt: ' . $e->getMessage());
         return ['ok' => false, 'message' => 'The receipt could not be saved. Nothing was changed.'];
     }
@@ -446,7 +446,7 @@ function jq_review_payment(PDO $pdo, int $bookingId, int $paymentId, bool $appro
                 $problem = 'Open the receipt and check it before verifying.';
             } elseif ($p['verification_status'] !== 'Pending Verification') {
                 $problem = $p['verification_status'] === 'Awaiting Receipt' ? 'This payment has no receipt, so it cannot be verified.' : 'Only a receipt waiting for verification can be verified.';
-            } elseif (!is_file(__DIR__ . '/../' . $p['receipt_path'])) {
+            } elseif (!jq_file_exists($p['receipt_path'])) {
                 $problem = 'The receipt file is missing, so this payment cannot be verified.';
             }
         } elseif ($p && !in_array($p['verification_status'], ['Receipt Submitted', 'Pending Verification', 'Verified'], true)) {
@@ -472,9 +472,9 @@ function jq_review_payment(PDO $pdo, int $bookingId, int $paymentId, bool $appro
 /** Opening a submitted receipt moves it to Pending Verification. Called only from the Admin and Owner file view. */
 function jq_mark_receipt_opened(PDO $pdo, int $paymentId): void
 {
-    $pdo->prepare("UPDATE booking_payments p JOIN event_bookings b ON b.booking_id = p.booking_id
-                      SET p.verification_status = 'Pending Verification'
-                    WHERE p.payment_id = ? AND p.verification_status = 'Receipt Submitted' AND b.is_archived = 0")->execute([$paymentId]);
+    $pdo->prepare("UPDATE booking_payments SET verification_status = 'Pending Verification'
+                    WHERE payment_id = ? AND verification_status = 'Receipt Submitted'
+                      AND booking_id IN (SELECT booking_id FROM event_bookings WHERE is_archived = 0)")->execute([$paymentId]);
 }
 
 /* ---------- Clients ---------- */
@@ -508,7 +508,7 @@ function jq_find_or_create_client(PDO $pdo, string $name, ?string $email, ?strin
     }
     $pdo->prepare("INSERT INTO clients (fullname, email, contact, postal_code, address, created_by) VALUES (?, ?, ?, ?, ?, ?)")
         ->execute([$name, $email ?: null, $contact ?: null, $postal ?: null, $address ?: null, $userId ?: null]);
-    $id = (int)$pdo->lastInsertId();
+    $id = jq_insert_id($pdo, 'clients', 'client_id');
     $pdo->prepare("UPDATE clients SET client_code = ? WHERE client_id = ?")->execute([sprintf('CL-%05d', $id), $id]);
     return $id;
 }
@@ -562,6 +562,9 @@ function jq_complete_booking(PDO $pdo, int $bookingId, int $userId): array
 
 function jq_private_dir(int $bookingId): string
 {
+    if (jq_is_hosted()) {
+        return 'uploads/private/' . $bookingId . '/'; // kept in the database, no folder needed
+    }
     $root = __DIR__ . '/../uploads/private';
     if (!is_dir($root)) {
         mkdir($root, 0755, true);
@@ -625,7 +628,7 @@ function jq_store_private_file(array $file, int $bookingId, string $prefix, ?str
         return null;
     }
     $path = jq_private_dir($bookingId) . $prefix . '_' . bin2hex(random_bytes(12)) . '.' . $ext;
-    if (!move_uploaded_file($file['tmp_name'], __DIR__ . '/../' . $path)) {
+    if (!jq_file_save_upload($file['tmp_name'], $path)) {
         $error = 'The file could not be saved. Please try again.';
         return null;
     }
@@ -635,9 +638,8 @@ function jq_store_private_file(array $file, int $bookingId, string $prefix, ?str
 /** Sends a stored file. Pictures and PDFs may open in the browser; anything else always downloads. */
 function jq_send_private_file(string $path, string $name, string $mime, bool $inline): void
 {
-    $full = realpath(__DIR__ . '/../' . $path);
-    $root = realpath(__DIR__ . '/../uploads/private');
-    if (!$full || !$root || strpos($full, $root . DIRECTORY_SEPARATOR) !== 0 || !is_file($full)) {
+    $file = strpos($path, 'uploads/private/') === 0 ? jq_file_read($path) : null;
+    if (!$file) {
         http_response_code(404);
         exit('File not found.');
     }
@@ -650,8 +652,8 @@ function jq_send_private_file(string $path, string $name, string $mime, bool $in
     header('Cache-Control: private, no-store');
     $safe = str_replace(['"', "\r", "\n"], '', $name);
     header('Content-Disposition: ' . ($canShow ? 'inline' : 'attachment') . '; filename="' . $safe . '"');
-    header('Content-Length: ' . filesize($full));
-    readfile($full);
+    header('Content-Length: ' . strlen($file['data']));
+    echo $file['data'];
     exit;
 }
 
@@ -668,8 +670,7 @@ function jq_remove_private_files(array $paths): void
 {
     foreach ($paths as $path) {
         if (strpos((string)$path, 'uploads/private/') === 0 && strpos((string)$path, '..') === false) {
-            @unlink(__DIR__ . '/../' . $path);
-            @rmdir(dirname(__DIR__ . '/../' . $path)); // only succeeds once the booking's folder is empty
+            jq_file_delete($path); // also removes the booking's folder once it is empty
         }
     }
 }

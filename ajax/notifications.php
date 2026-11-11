@@ -44,16 +44,7 @@ try {
         case 'get_notifications':
             $limit = max(1, min(50, (int)($_GET['limit'] ?? 10)));
             $stmt = $pdo->prepare("
-                SELECT n.id, n.type, n.title, n.message, n.reference_id, n.reference_type, n.is_read, n.actor_username, n.created_at,
-                       CASE
-                           WHEN TIMESTAMPDIFF(MINUTE, n.created_at, NOW()) < 60
-                               THEN CONCAT(TIMESTAMPDIFF(MINUTE, n.created_at, NOW()), ' min ago')
-                           WHEN TIMESTAMPDIFF(HOUR, n.created_at, NOW()) < 24
-                               THEN CONCAT(TIMESTAMPDIFF(HOUR, n.created_at, NOW()), ' hours ago')
-                           WHEN TIMESTAMPDIFF(DAY, n.created_at, NOW()) < 7
-                               THEN CONCAT(TIMESTAMPDIFF(DAY, n.created_at, NOW()), ' days ago')
-                           ELSE DATE_FORMAT(n.created_at, '%M %d, %Y')
-                       END AS time_ago
+                SELECT n.id, n.type, n.title, n.message, n.reference_id, n.reference_type, n.is_read, n.actor_username, n.created_at
                   FROM notifications n
                  WHERE n.user_id = ?
                  ORDER BY n.created_at DESC, n.id DESC
@@ -61,6 +52,13 @@ try {
             ");
             $stmt->execute([$user_id]);
             $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // "5 min ago" is worked out here, the same way on MySQL and PostgreSQL
+            foreach ($notifications as &$n) {
+                $mins = intdiv(max(0, time() - strtotime((string)$n['created_at'])), 60);
+                $n['time_ago'] = $mins < 60 ? $mins . ' min ago' : ($mins < 1440 ? intdiv($mins, 60) . ' hours ago'
+                    : ($mins < 10080 ? intdiv($mins, 1440) . ' days ago' : date('F d, Y', strtotime((string)$n['created_at']))));
+            }
+            unset($n);
             echo json_encode(['success' => true, 'notifications' => $notifications, 'count' => count($notifications)]);
             break;
 

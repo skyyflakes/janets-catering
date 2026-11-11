@@ -33,26 +33,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $ext = jq_image_upload_extension($_FILES['profile_photo'] ?? [], $error_message, JQ_PROFILE_PHOTO_MAX_BYTES, ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp']);
         if ($ext !== null) {
             $upload_dir = 'uploads/profile/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0755, true);
-            }
-            if (!is_file($upload_dir . '.htaccess')) {
+            jq_file_dir($upload_dir);
+            if (!jq_is_hosted() && !is_file($upload_dir . '.htaccess')) {
                 @file_put_contents($upload_dir . '.htaccess', "Options -Indexes\n<FilesMatch \"\\.(php|phtml|phar|phps|cgi|pl|py|sh)$\">\n    Require all denied\n</FilesMatch>\n");
             }
             $path = $upload_dir . 'profile_' . $user_id . '_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-            if (!move_uploaded_file($_FILES['profile_photo']['tmp_name'], $path)) {
+            if (!jq_file_save_upload($_FILES['profile_photo']['tmp_name'], $path)) {
                 $error_message = 'The photo could not be saved. Please try again.';
             } else {
                 try {
                     $pdo->prepare("UPDATE users SET profile_photo = ? WHERE id = ?")->execute([$path, $user_id]);
                     $old = (string)$user_data['profile_photo'];
-                    if (strpos($old, $upload_dir) === 0 && strpos($old, '..') === false && is_file($old)) {
-                        @unlink($old); // only after the database points at the new photo
+                    if (strpos($old, $upload_dir) === 0 && strpos($old, '..') === false) {
+                        jq_file_delete($old); // only after the database points at the new photo
                     }
                     setFlash('Your profile photo was updated.', 'success');
                     redirect('profile.php');
                 } catch (PDOException $e) {
-                    @unlink($path);
+                    jq_file_delete($path);
                     error_log('update_photo: ' . $e->getMessage());
                     $error_message = 'The photo could not be saved. Please try again.';
                 }
@@ -152,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Figures for the dashboard
 $full_name = trim(($user_data['first_name'] ?? '') . ' ' . ($user_data['last_name'] ?? ''));
 $display_name = $full_name !== '' ? $full_name : $user_data['username'];
-$has_photo = !empty($user_data['profile_photo']) && is_file($user_data['profile_photo']);
+$has_photo = !empty($user_data['profile_photo']) && jq_file_exists($user_data['profile_photo']);
 $stmt = $pdo->prepare("SELECT MAX(created_at) FROM activity_logs WHERE user_id = ? AND action = 'LOGIN'");
 $stmt->execute([$user_id]);
 $last_login = $stmt->fetchColumn();

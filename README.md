@@ -3,7 +3,12 @@
 Web system for Janet's Quality Catering Services: event booking wizard, payments with proof of payment,
 client records, food menus, client surveys, reports, accounts, and Predictive Analytics using the ARIMA model.
 
-Built with PHP 8, MariaDB/MySQL, Bootstrap 5 and Chart.js.
+Built with PHP 8, Bootstrap 5 and Chart.js. The same code runs on two databases:
+
+| Where | Database | Files and sign-in sessions |
+|---|---|---|
+| XAMPP on a computer | MySQL / MariaDB | `uploads/` folder and PHP session files |
+| Online (Vercel) | PostgreSQL on Supabase | stored in the database (Vercel's disk is temporary) |
 
 ## Run on your computer (XAMPP)
 
@@ -12,15 +17,45 @@ Built with PHP 8, MariaDB/MySQL, Bootstrap 5 and Chart.js.
    then `database/psgc_address_tables.sql` and `database/migration_seed_food_menus.sql`.
 3. Open `http://localhost/VERANO/login.php`.
 
-## Deploy on Vercel
+## Put it online: Supabase (database) + Vercel (hosting)
 
-`vercel.json` runs the pages with the community runtime `vercel-php`. Every request goes through `api/index.php`.
+### 1. Supabase database
+1. Create a project at https://supabase.com (region: Southeast Asia (Singapore)). Keep the database password.
+2. Open **SQL Editor**, paste the whole file `database/postgres/janets_catering_pg.sql`, and click **Run**.
+3. Copy the data from XAMPP. On the XAMPP computer, in PowerShell inside the project folder, with the
+   **Session pooler** details from Supabase (**Connect** button):
+   ```powershell
+   $env:TARGET_HOST = 'aws-0-ap-southeast-1.pooler.supabase.com'
+   $env:TARGET_PORT = '5432'
+   $env:TARGET_DB   = 'postgres'
+   $env:TARGET_USER = 'postgres.your-project-ref'
+   $env:TARGET_PASS = 'your-database-password'
+   C:\xampp\php\php.exe -d extension=pdo_pgsql cli\copy_to_pg.php
+   ```
+   This copies every table and the uploaded receipts and photos.
 
-1. Import this repository at https://vercel.com/new (Framework preset: Other). No build command is needed.
-2. The system needs an online MySQL database. Create one, import the SQL files above, then add these
-   environment variables in Vercel (Settings → Environment Variables): `DB_HOST`, `DB_PORT`, `DB_NAME`,
-   `DB_USER`, `DB_PASS`, and `DB_SSL=1` if the provider requires an encrypted connection.
-3. Redeploy.
+### 2. Vercel hosting
+1. Import this GitHub repository at https://vercel.com/new (Framework preset: **Other**, no build command).
+2. In **Settings → Environment Variables** add:
 
-Limitations on Vercel: uploaded receipts and photos are not kept, sign-ins can be lost between requests,
-emailed login codes need the mail settings file, and scheduled backups and clean-up do not run.
+   | Name | Value |
+   |---|---|
+   | `DB_DRIVER` | `pgsql` |
+   | `DB_HOST` | Session pooler host, e.g. `aws-0-ap-southeast-1.pooler.supabase.com` |
+   | `DB_PORT` | `5432` |
+   | `DB_NAME` | `postgres` |
+   | `DB_USER` | `postgres.your-project-ref` |
+   | `DB_PASS` | the Supabase database password |
+   | `DB_SSL` | `1` |
+   | `SMTP_PASSWORD` | the Gmail App Password used for login codes |
+   | `APP_BASE_URL` | the site address, e.g. `https://janets-catering.vercel.app` |
+
+3. Deploy (or Redeploy after adding the variables).
+
+`vercel.json` runs every page through `api/index.php` with the community runtime `vercel-php`.
+
+### Online differences
+- Backup & Restore: Supabase keeps the database backups (Supabase dashboard → Database → Backups).
+- The 30-day archive clean-up runs during normal use, at most once an hour, instead of a Windows scheduled task.
+- Changing the database later: update XAMPP first, then regenerate the PostgreSQL schema with
+  `C:\xampp\php\php.exe cli\make_pg_schema.php`.
