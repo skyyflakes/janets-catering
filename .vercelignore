@@ -3,3 +3,10 @@ docs/
 cli/
 *.md
 .gitignore
+.env*
+.vercel/
+package.json
+package-lock.json
+node_modules/
+next.config.mjs
+tsconfig.json

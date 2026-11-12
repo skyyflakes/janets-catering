@@ -120,6 +120,17 @@ function jq_set_audit_vars(PDO $pdo, array $vars): void
  * @return PDO|null
  */
 function getDBConnection() {
+    // Hosted: one connection per page load. Each new encrypted connection to Supabase costs a network round trip,
+    // and a page used to open several (session, page, files). The audit context follows the signed-in user.
+    static $shared = null, $sharedUser = false;
+    if ($shared !== null) {
+        $uid = session_status() === PHP_SESSION_ACTIVE ? ($_SESSION['user_id'] ?? null) : null;
+        if ($uid !== $sharedUser) {
+            applyAuditContext($shared);
+            $sharedUser = $uid;
+        }
+        return $shared;
+    }
     try {
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -141,11 +152,11 @@ function getDBConnection() {
         }
 
         $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+        applyAuditContext($pdo); // on PostgreSQL this also sets Philippine time
         if (jq_is_pg()) {
-            // Times are stored and compared as Philippine time, as on XAMPP.
-            $pdo->exec("SET TIME ZONE 'Asia/Manila'");
+            $shared = $pdo;
+            $sharedUser = session_status() === PHP_SESSION_ACTIVE ? ($_SESSION['user_id'] ?? null) : null;
         }
-        applyAuditContext($pdo);
         return $pdo;
         
     } catch (PDOException $e) {
@@ -174,7 +185,8 @@ function applyAuditContext($pdo) {
 
         if (jq_is_pg()) {
             // PostgreSQL keeps the same values as connection settings (app.*) that the audit triggers read.
-            $stmt = $pdo->prepare("SELECT set_config('app.context', '1', false), set_config('app.user_id', ?, false), set_config('app.username', ?, false),
+            // Times are stored and compared as Philippine time, as on XAMPP.
+            $stmt = $pdo->prepare("SELECT set_config('TimeZone', 'Asia/Manila', false), set_config('app.context', '1', false), set_config('app.user_id', ?, false), set_config('app.username', ?, false),
                                           set_config('app.role', ?, false), set_config('app.ip', ?, false), set_config('app.ua', ?, false),
                                           set_config('app.page', ?, false), set_config('app.log_mgmt', '0', false), set_config('app.log_reason', '', false)");
             $stmt->execute([(string)($userId ?? ''), $user, (string)($role ?? ''), $ip, $agent, $page]);

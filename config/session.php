@@ -35,6 +35,9 @@ if (!class_exists('JqDbSessionHandler')) {
 
         public function write(string $id, string $data): bool
         {
+            if ($this->db()->inTransaction()) {
+                $this->db()->rollBack(); // a page that stopped mid-change must not take the session down with it
+            }
             $this->db()->prepare(jq_is_pg()
                 ? 'INSERT INTO app_sessions (id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at'
                 : 'INSERT INTO app_sessions (id, data, updated_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = VALUES(updated_at)')
