@@ -10,3 +10,4 @@ package-lock.json
 node_modules/
 next.config.mjs
 tsconfig.json
+/index.php
