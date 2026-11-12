@@ -185,7 +185,7 @@ require_once 'includes/header.php';
                 </div>
             </div>
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover dash-recent-table">
                     <thead><tr><th>Event</th><th>Customer</th><th>Date</th><th>Pax</th><th class="text-end">Total</th><th>Status</th></tr></thead>
                     <tbody id="recentBookingsBody"></tbody>
                 </table>
@@ -216,6 +216,18 @@ require_once 'includes/header.php';
 .status-cancelled { background:rgba(255,62,29,.14); color:#d9342b; }
 
 #totalRevenueValue { font-size: 1.3rem; white-space: nowrap; }
+/* Recent Bookings: normal-size text that fits beside Popular Packages on laptops */
+.dash-recent-table { font-size: .85rem; margin-bottom: 0; }
+html body .dash-recent-table th:not(#x) { font-size: .7rem; padding: .7rem .45rem; white-space: nowrap; }
+html body .dash-recent-table td:not(#x) { padding: .6rem .45rem; vertical-align: middle; }
+.dash-recent-table td:nth-child(5) strong { font-size: .82rem; }
+.dash-recent-table .revenue-eye-btn { padding-left: 6px; }
+.dash-recent-table td strong { font-size: .875rem; }
+.dash-recent-table td small { font-size: .75rem; line-height: 1.3; display: inline-block; }
+.dash-recent-table td:first-child { min-width: 165px; }
+.dash-recent-table td:nth-child(3), .dash-recent-table td:nth-child(5), .dash-recent-table td:nth-child(6) { white-space: nowrap; }
+.dash-recent-table td:first-child > .d-flex > div:first-child { width: 32px !important; height: 32px !important; flex-shrink: 0; margin-right: 10px !important; }
+.dash-recent-table .status-pill { padding: 3px 9px; font-size: .66rem; white-space: nowrap; }
 /* Eye toggle button for dashboard prices */
 .revenue-eye-btn {
     background: transparent;

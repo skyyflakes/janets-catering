@@ -425,7 +425,19 @@ html[data-theme="dark"] #jqPage .jq-alert code { background: rgba(255,255,255,.0
     /* booking wizard steps */
     html body .step-circle { width: 38px; height: 38px; margin-bottom: 6px; }
     html body .step-title { font-size: .72rem; }
+    /* form boxes: one per row, the same height, labels and boxes lined up */
+    html body #jqPage .jq-filters { grid-template-columns: 1fr; gap: 10px; }
+    html body #jqPage .jq-filters .jq-field-wide { grid-column: auto; }
+    html body #jqPage .jq-filter-actions { justify-content: flex-end; }
+    html body #jqPage .jq-input, html body #jqPage .jq-select { min-height: 42px; }
+    html body .content-wrapper .form-row { grid-template-columns: 1fr; gap: 0; }
+    html body .content-wrapper .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), html body .content-wrapper .form-group select { min-height: 45px; }
+    html body .content-wrapper input[type="date"], html body .content-wrapper input[type="time"] { min-height: 42px; }
+    html body .content-wrapper .form-control, html body .content-wrapper .form-select { min-height: 42px; }
     /* side menu */
     html body .menu-link { padding: 8px 14px; }
     html body .menu-link i { font-size: 1.15rem; margin-right: 10px; }
 }
+
+/* Card headers are flex rows: let their inner title-and-button row use the full width */
+.card-header > .d-flex:only-child { flex: 1 1 auto; min-width: 0; }
