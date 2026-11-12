@@ -59,3 +59,13 @@ Built with PHP 8, Bootstrap 5 and Chart.js. The same code runs on two databases:
 - The 30-day archive clean-up runs during normal use, at most once an hour, instead of a Windows scheduled task.
 - Changing the database later: update XAMPP first, then regenerate the PostgreSQL schema with
   `C:\xampp\php\php.exe cli\make_pg_schema.php`.
+
+## Passwords
+Passwords are saved as salted SHA-256 hashes (PBKDF2-HMAC-SHA256, 310,000 rounds), in the form
+`pbkdf2_sha256$rounds$salt$hash`. People type their normal password; the database never holds it.
+Accounts with an older bcrypt hash are moved to SHA-256 automatically the next time they sign in.
+
+## Postal codes
+In Event Bookings the postal code is filled in from the chosen City/Municipality and Barangay
+(`includes/ph_postal_codes.php`). It can still be typed over. ZIP data: [GeoNames](https://www.geonames.org),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

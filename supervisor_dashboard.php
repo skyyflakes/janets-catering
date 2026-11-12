@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     } elseif (($password_error = jq_password_error($new)) !== null) {
         setFlash($password_error, 'danger');
     } else {
-        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([password_hash($new, PASSWORD_BCRYPT), $user_id]);
+        $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([jq_password_hash($new), $user_id]);
         setFlash('Your password was changed.', 'success');
     }
     redirect('supervisor_dashboard.php');

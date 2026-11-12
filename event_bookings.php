@@ -283,7 +283,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
         $province_code = sanitize($_POST['province_code'] ?? '');
         $stmt = $pdo->prepare("SELECT id, municipality_code, municipality_name FROM psgc_municipalities WHERE province_code = ? ORDER BY municipality_name ASC");
         $stmt->execute([$province_code]);
-        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as &$row) {
+            $row['postal_code'] = jq_postal_for($row['municipality_code']);
+        }
+        unset($row);
+        echo json_encode($rows);
         exit;
     }
 
@@ -291,7 +296,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
         $municipality_code = sanitize($_POST['municipality_code'] ?? '');
         $stmt = $pdo->prepare("SELECT id, barangay_code, barangay_name FROM psgc_barangays WHERE municipality_code = ? ORDER BY barangay_name ASC");
         $stmt->execute([$municipality_code]);
-        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as &$row) {
+            $row['postal_code'] = jq_postal_for($municipality_code, $row['barangay_code']);
+        }
+        unset($row);
+        echo json_encode($rows);
         exit;
     }
 
@@ -533,6 +543,9 @@ function eb_read_booking_form(PDO $pdo, int $bookingId): array
         'package_id'    => (int)($_POST['package_id'] ?? 0),
         'client_id'     => (int)($_POST['client_id'] ?? 0),
     ];
+    if ($v['postal_code'] === '') { // the browser fills it in from the location; do the same if it did not
+        $v['postal_code'] = jq_postal_for(sanitize($_POST['municipality_code'] ?? ''), sanitize($_POST['barangay_code'] ?? ''));
+    }
     $e = [];
     if (($m = jq_name_error($v['fullname'], 'Full name', true, 255)) !== null) $e[] = $m;
     if (!$v['email'] || !filter_var($v['email'], FILTER_VALIDATE_EMAIL)) $e[] = 'A valid email is required.';
@@ -2388,7 +2401,8 @@ $pf = function($key, $default = '') use ($is_edit, $edit_data) {
                 </div>
                 <div class="form-group">
                     <label>Postal Code <span class="required">*</span></label>
-                    <input type="text" name="postal_code" data-rule="postal" placeholder="1100" value="<?= $pf('postal_code') ?>" required>
+                    <input type="text" name="postal_code" id="postalCodeInput" data-rule="postal" placeholder="1100" value="<?= $pf('postal_code') ?>" required>
+                    <small id="postalCodeNote" style="color:var(--secondary); font-size:.82rem;">Filled in automatically when you choose the City/Municipality and Barangay.</small>
                 </div>
                 <div class="form-group">
                     <label for="bookingNotes">Special Requests and Notes</label>
@@ -3215,6 +3229,7 @@ function loadProvinces() {
     document.getElementById('regionName').value = regionCode ? regionName : '';
     // A new region means the rest of the location must be chosen again.
     ['provinceName', 'municipalityName', 'barangayName'].forEach(id => { document.getElementById(id).value = ''; });
+    fillPostalCode('');
     if (!regionCode) { document.getElementById('provinceSelect').innerHTML = '<option value="">-- Select Province --</option>'; return; }
     fetch('event_bookings.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'ajax_action=get_provinces&region_code='+encodeURIComponent(regionCode) })
     .then(r=>r.json()).then(data => {
@@ -3230,11 +3245,12 @@ function loadMunicipalities() {
     const pCode = document.getElementById('provinceSelect').value;
     const pName = document.getElementById('provinceSelect').options[document.getElementById('provinceSelect').selectedIndex].text;
     document.getElementById('provinceName').value = pName;
+    fillPostalCode('');
     if (!pCode) { document.getElementById('municipalitySelect').innerHTML = '<option value="">-- Select City/Municipality --</option>'; return; }
     fetch('event_bookings.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'ajax_action=get_municipalities&province_code='+encodeURIComponent(pCode) })
     .then(r=>r.json()).then(data => {
         let html = '<option value="">-- Select City/Municipality --</option>';
-        data.forEach(m => { html += `<option value="${m.municipality_code}">${m.municipality_name}</option>`; });
+        data.forEach(m => { html += `<option value="${m.municipality_code}" data-postal="${m.postal_code || ''}">${m.municipality_name}</option>`; });
         document.getElementById('municipalitySelect').innerHTML = html;
         document.getElementById('barangaySelect').innerHTML = '<option value="">-- Select Barangay --</option>';
     });
@@ -3244,11 +3260,12 @@ function loadBarangays() {
     const mCode = document.getElementById('municipalitySelect').value;
     const mName = document.getElementById('municipalitySelect').options[document.getElementById('municipalitySelect').selectedIndex].text;
     document.getElementById('municipalityName').value = mName;
+    fillPostalCode(mCode ? document.getElementById('municipalitySelect').selectedOptions[0].dataset.postal : '');
     if (!mCode) { document.getElementById('barangaySelect').innerHTML = '<option value="">-- Select Barangay --</option>'; return; }
     fetch('event_bookings.php', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'ajax_action=get_barangays&municipality_code='+encodeURIComponent(mCode) })
     .then(r=>r.json()).then(data => {
         let html = '<option value="">-- Select Barangay --</option>';
-        data.forEach(b => { html += `<option value="${b.barangay_code}">${b.barangay_name}</option>`; });
+        data.forEach(b => { html += `<option value="${b.barangay_code}" data-postal="${b.postal_code || ''}">${b.barangay_name}</option>`; });
         document.getElementById('barangaySelect').innerHTML = html;
     });
 }
@@ -3256,7 +3273,26 @@ function loadBarangays() {
 function updateBarangayName() {
     const sel = document.getElementById('barangaySelect');
     document.getElementById('barangayName').value = sel.options[sel.selectedIndex].text;
+    const city = document.getElementById('municipalitySelect').selectedOptions[0];
+    fillPostalCode((sel.value && sel.selectedOptions[0].dataset.postal) || (city ? city.dataset.postal : ''));
 }
+
+// The postal code follows the chosen place. It can still be typed over, for example for a place not in the list.
+function fillPostalCode(code) {
+    const box = document.getElementById('postalCodeInput');
+    const note = document.getElementById('postalCodeNote');
+    if (code) {
+        box.value = code;
+        box.dataset.auto = '1';
+        note.textContent = 'Filled in automatically from the chosen location. Change it only if it is wrong.';
+    } else if (box.dataset.auto === '1') {
+        box.value = '';
+        delete box.dataset.auto;
+        note.textContent = 'No postal code is on file for this place. Please type it in.';
+    }
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+}
+document.getElementById('postalCodeInput')?.addEventListener('input', e => { if (e.isTrusted) delete e.target.dataset.auto; });
 
 // ─── PRICE CALC ───────────────────────────────────────────
 // Format a number as Philippine Peso with commas on thousands (e.g. ₱1,000.00)

@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $error_message = 'Choose a new password that is different from your current one.';
         } else {
             try {
-                $pdo->prepare("UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?")->execute([password_hash($new_password, PASSWORD_BCRYPT), $user_id]);
+                $pdo->prepare("UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?")->execute([jq_password_hash($new_password), $user_id]);
                 setFlash('Your password was changed.', 'success');
                 redirect('profile.php');
             } catch (PDOException $e) {

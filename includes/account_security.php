@@ -137,11 +137,11 @@ function jq_password_matches_account(PDO $pdo, int $userId, string $password): b
     if ($hash === false || $hash === null) {
         return false; // no such account, or its credentials were permanently removed
     }
-    if (password_verify($password, $hash)) {
+    if (jq_password_verify($password, $hash)) {
         return true;
     }
     foreach (getFallbackAccounts() as $acc) {
-        if ((int)$acc['user_id'] === $userId && password_verify($password, $acc['hash'])) {
+        if ((int)$acc['user_id'] === $userId && jq_password_verify($password, $acc['hash'])) {
             return true;
         }
     }

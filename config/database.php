@@ -232,10 +232,49 @@ function sanitize($data) {
 function getFallbackAccounts() {
     return [
         ['user_id' => 1, 'username' => 'veranosean91@gmail.com', 'alias' => 'admin', 'role' => 'ADMIN',
-         'hash' => '$2y$12$ZyOT/DHemk.deJtyqSSxfezYGzRoQrT5gWxUvnc74xCR.Qv.A/3/S'],
+         'hash' => 'pbkdf2_sha256$310000$x4aIq72GGaG7ELczuSYn7Q==$CfIjqQc5HVMXtFt9lYY/KXIhpEinqDG3HyU1zER+fWc='],
         ['user_id' => 2, 'username' => 'naesleirgabonarev@gmail.com', 'alias' => 'owner', 'role' => 'OWNER',
-         'hash' => '$2y$12$zBjNAyKJMLjKvn9GOlEy/O1Zoq8MYVtAq7HdKWKlIpSMssvkg6sXK'],
+         'hash' => 'pbkdf2_sha256$310000$v+7Qx4gci1BnRI1GWP6ykQ==$zrhuF0IvNcatFButn492p11ei6dJZxyiWQukf6uycK4='],
     ];
+}
+
+/*
+ * Passwords are saved as salted SHA-256 hashes (PBKDF2-HMAC-SHA256), never as the password itself:
+ *   pbkdf2_sha256$<rounds>$<salt, base64>$<hash, base64>
+ * People still type their normal password; only the database copy is hashed. Older bcrypt hashes ($2y$...)
+ * are still accepted and are replaced with the SHA-256 form the next time that person signs in.
+ */
+const JQ_PASSWORD_ROUNDS = 310000;
+
+function jq_password_hash(string $password): string
+{
+    $salt = random_bytes(16);
+    $hash = hash_pbkdf2('sha256', $password, $salt, JQ_PASSWORD_ROUNDS, 32, true);
+    return 'pbkdf2_sha256$' . JQ_PASSWORD_ROUNDS . '$' . base64_encode($salt) . '$' . base64_encode($hash);
+}
+
+function jq_password_verify(string $password, ?string $stored): bool
+{
+    if ($stored === null || $stored === '') {
+        return false;
+    }
+    $parts = explode('$', $stored);
+    if (count($parts) === 4 && $parts[0] === 'pbkdf2_sha256') {
+        $rounds = (int)$parts[1];
+        $salt = base64_decode($parts[2], true);
+        $hash = base64_decode($parts[3], true);
+        if ($rounds < 1 || $salt === false || $hash === false || $hash === '') {
+            return false;
+        }
+        return hash_equals($hash, hash_pbkdf2('sha256', $password, $salt, $rounds, strlen($hash), true));
+    }
+    return password_verify($password, $stored); // older bcrypt hash
+}
+
+/** True when the saved hash is an older kind and should be replaced at the next sign-in. */
+function jq_password_needs_upgrade(?string $stored): bool
+{
+    return !preg_match('/^pbkdf2_sha256\$' . JQ_PASSWORD_ROUNDS . '\$/', (string)$stored);
 }
 
 /**

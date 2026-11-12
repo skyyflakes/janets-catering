@@ -136,7 +136,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$username, $username, $username]);
                 // First password match wins
                 while ($user = $stmt->fetch()) {
-                    if (!empty($user['password']) && password_verify($password, $user['password'])) {
+                    if (!empty($user['password']) && jq_password_verify($password, $user['password'])) {
+                        if (jq_password_needs_upgrade($user['password'])) { // move an older bcrypt hash to SHA-256
+                            try {
+                                $pdo->prepare("UPDATE users SET password = ? WHERE id = ?")->execute([jq_password_hash($password), $user['id']]);
+                            } catch (Throwable $e) {
+                                error_log('Password hash upgrade failed: ' . $e->getMessage());
+                            }
+                        }
                         $found = [
                             'user_id'  => $user['id'],
                             'username' => $user['username'],
@@ -158,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$found) {
             foreach (getFallbackAccounts() as $acc) {
                 $nameMatches = strcasecmp($username, $acc['username']) === 0 || strcasecmp($username, $acc['alias']) === 0;
-                if ($nameMatches && password_verify($password, $acc['hash'])) {
+                if ($nameMatches && jq_password_verify($password, $acc['hash'])) {
                     $found = [
                         'user_id'  => $acc['user_id'],
                         'username' => $acc['username'],

@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'This phone number is already registered to another account.';
         } else {
             try {
-                $hashed_password = password_hash($password, PASSWORD_BCRYPT);
+                $hashed_password = jq_password_hash($password);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, email, first_name, last_name, contact_number, role, status, is_verified, address, region_code, province_code, city_code, barangay_code, street_address, postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$username, $hashed_password, $email, $first_name, $last_name, $contact, $new_role, $address, $region_code, $province_code, $city_code, $barangay_code, $street_address, $postal_code]);
                 $new_user_id = jq_insert_id($pdo, 'users', 'id');

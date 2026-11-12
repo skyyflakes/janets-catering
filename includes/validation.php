@@ -78,3 +78,14 @@ function jq_postal_error(string $postal): ?string
     }
     return preg_match('/^\d{4}$/', $postal) ? null : JQ_POSTAL_MESSAGE;
 }
+
+/**
+ * The ZIP code of a place in the address lists: the barangay's own ZIP where it has one (Metro Manila areas),
+ * otherwise the city's or municipality's. Empty when the place is not in includes/ph_postal_codes.php.
+ */
+function jq_postal_for(?string $municipalityCode, ?string $barangayCode = null): string
+{
+    static $zips = null;
+    $zips ??= require __DIR__ . '/ph_postal_codes.php';
+    return (string)($zips['b'][(string)$barangayCode] ?? $zips['m'][(string)$municipalityCode] ?? '');
+}
