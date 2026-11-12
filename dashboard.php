@@ -49,7 +49,7 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row mb-4">
-    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+    <div class="col-lg-3 col-6 mb-4">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
@@ -65,7 +65,7 @@ require_once 'includes/header.php';
         </div></div>
     </div>
 
-    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+    <div class="col-lg-3 col-6 mb-4">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
@@ -80,7 +80,7 @@ require_once 'includes/header.php';
         </div></div>
     </div>
 
-    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+    <div class="col-lg-3 col-6 mb-4">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
@@ -96,7 +96,7 @@ require_once 'includes/header.php';
     </div>
 
     <!-- CHANGED: Total Revenue card now masked with (*) and has an eye toggle -->
-    <div class="col-lg-3 col-md-6 col-sm-6 mb-4">
+    <div class="col-lg-3 col-6 mb-4">
         <div class="card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
                 <div>

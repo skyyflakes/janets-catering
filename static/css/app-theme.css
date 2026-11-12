@@ -396,3 +396,36 @@ html[data-theme="dark"] #jqPage .jq-alert code { background: rgba(255,255,255,.0
 @media (max-width: 420px) {
     #jqPage .jq-stats { grid-template-columns: 1fr; }
 }
+
+/* ---------- Phones (Android and iPhone): tighter sizes and spacing, same colors and theme ---------- */
+@media (max-width: 576px) {
+    html { font-size: 15px; }
+    html body .content-wrapper { padding: 12px; }
+    /* page titles */
+    html body .content-wrapper h1, html body .content-wrapper .dashboard-title { font-size: 1.45rem; line-height: 1.25; }
+    html body .content-wrapper h2 { font-size: 1.3rem; }
+    html body .content-wrapper h3 { font-size: 1.15rem; }
+    html body .content-wrapper h4, html body .content-wrapper .page-title { font-size: 1.1rem; }
+    /* cards and summary boxes */
+    html body .content-wrapper .card-body { padding: 1rem; }
+    html body #jqPage .jq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    html body #jqPage .jq-stat { padding: 12px; }
+    html body #jqPage .jq-stat-icon { width: 32px; height: 32px; font-size: 1rem; }
+    html body #jqPage .jq-stat-value { font-size: 1.2rem; }
+    html body .content-wrapper .stat-card { padding: 12px; }
+    html body .content-wrapper .stat-card .v { font-size: 1.35rem; }
+    /* buttons */
+    html body .content-wrapper .btn:not(.btn-sm):not(.btn-lg) { padding: .45rem .85rem; font-size: .9rem; }
+    /* tables scroll sideways inside their card; keep rows compact */
+    html body .content-wrapper table { font-size: .875rem; }
+    html body .header-actions .btn-outline-neutral, html body .header-actions .btn-add-event,
+    html body .wizard-header .back-button { padding: .45rem .85rem; font-size: .875rem; }
+    html body .wizard-header h1 { font-size: 1.3rem; }
+    html body .wizard-header { gap: 10px; }
+    /* booking wizard steps */
+    html body .step-circle { width: 38px; height: 38px; margin-bottom: 6px; }
+    html body .step-title { font-size: .72rem; }
+    /* side menu */
+    html body .menu-link { padding: 8px 14px; }
+    html body .menu-link i { font-size: 1.15rem; margin-right: 10px; }
+}
