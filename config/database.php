@@ -232,9 +232,9 @@ function sanitize($data) {
 function getFallbackAccounts() {
     return [
         ['user_id' => 1, 'username' => 'veranosean91@gmail.com', 'alias' => 'admin', 'role' => 'ADMIN',
-         'hash' => '$2y$12$/8pUSzajroNO.JHpecyq7eI0Gzg/Xipse//VudAlYwJ502M6lI2Ty'],
+         'hash' => '$2y$12$ZyOT/DHemk.deJtyqSSxfezYGzRoQrT5gWxUvnc74xCR.Qv.A/3/S'],
         ['user_id' => 2, 'username' => 'naesleirgabonarev@gmail.com', 'alias' => 'owner', 'role' => 'OWNER',
-         'hash' => '$2y$12$9usIB0vpZGnQneLjKg1.MuGi9zrNxJeZawUqeIUWiLRs7fkCfGBUq'],
+         'hash' => '$2y$12$zBjNAyKJMLjKvn9GOlEy/O1Zoq8MYVtAq7HdKWKlIpSMssvkg6sXK'],
     ];
 }
 
