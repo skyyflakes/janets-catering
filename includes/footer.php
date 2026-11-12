@@ -71,6 +71,28 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="static/js/password-toggle.js"></script>
+    <script>
+        // Row menus (e.g. Actions): open upward when there is more room above, and scroll inside
+        // themselves when they are taller than the space, so no item is cut off at the bottom of the screen.
+        document.addEventListener('show.bs.dropdown', function (e) {
+            var toggle = e.target;
+            var wrap = toggle.closest('.content-wrapper .dropdown, .content-wrapper .dropup');
+            var menu = wrap && wrap.querySelector('.dropdown-menu');
+            if (!menu) return;
+            menu.style.maxHeight = ''; menu.style.overflowY = '';
+            var saved = [menu.style.display, menu.style.visibility, menu.style.position];
+            menu.style.visibility = 'hidden'; menu.style.display = 'block'; menu.style.position = 'fixed';
+            var height = menu.offsetHeight;
+            menu.style.display = saved[0]; menu.style.visibility = saved[1]; menu.style.position = saved[2];
+            var r = toggle.getBoundingClientRect();
+            var below = window.innerHeight - r.bottom - 12, above = r.top - 12;
+            var up = height > below && above > below;
+            wrap.classList.toggle('dropup', up);
+            wrap.classList.toggle('dropdown', !up);
+            var room = up ? above : below;
+            if (height > room) { menu.style.maxHeight = Math.max(160, room) + 'px'; menu.style.overflowY = 'auto'; }
+        });
+    </script>
 
     <script>
         // ===================== LOGIN SUCCESS ALERT =====================
